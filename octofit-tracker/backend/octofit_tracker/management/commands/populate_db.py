@@ -1,57 +1,32 @@
 from django.core.management.base import BaseCommand
-from octofit_tracker.models import User, Team, Activity, Leaderboard, Workout
-from bson import ObjectId
-from datetime import timedelta
+from pymongo import MongoClient
+from octofit_tracker.test_data import test_data
+from django.conf import settings
 
 class Command(BaseCommand):
     help = 'Populate the database with test data for users, teams, activities, leaderboard, and workouts'
 
     def handle(self, *args, **kwargs):
+        # Connect to MongoDB
+        client = MongoClient(settings.DATABASES['default']['CLIENT']['host'])
+        db = client[settings.DATABASES['default']['NAME']]
+
         # Clear existing data
-        User.objects.all().delete()
-        Team.objects.all().delete()
-        Activity.objects.all().delete()
-        Leaderboard.objects.all().delete()
-        Workout.objects.all().delete()
+        db.users.delete_many({})
+        db.teams.delete_many({})
+        db.activity.delete_many({})
+        db.leaderboard.delete_many({})
+        db.workouts.delete_many({})
 
-        # Create users
-        users = [
-            User(_id=ObjectId(), username='student1', email='student1@example.com', password='password1'),
-            User(_id=ObjectId(), username='student2', email='student2@example.com', password='password2'),
-            User(_id=ObjectId(), username='student3', email='student3@example.com', password='password3'),
-        ]
-        User.objects.bulk_create(users)
+        # Convert timedelta to seconds for activities
+        for activity in test_data['activities']:
+            activity['duration'] = activity['duration'].total_seconds()
 
-        # Create teams
-        team1 = Team(_id=ObjectId(), name='Team A')
-        team2 = Team(_id=ObjectId(), name='Team B')
-        team1.save()
-        team2.save()
-        team1.members.add(users[0], users[1])
-        team2.members.add(users[2])
-
-        # Create activities
-        activities = [
-            Activity(_id=ObjectId(), user=users[0], activity_type='Running', duration=timedelta(minutes=30)),
-            Activity(_id=ObjectId(), user=users[1], activity_type='Cycling', duration=timedelta(minutes=45)),
-            Activity(_id=ObjectId(), user=users[2], activity_type='Swimming', duration=timedelta(minutes=60)),
-        ]
-        Activity.objects.bulk_create(activities)
-
-        # Create leaderboard entries
-        leaderboard_entries = [
-            Leaderboard(_id=ObjectId(), user=users[0], score=100),
-            Leaderboard(_id=ObjectId(), user=users[1], score=90),
-            Leaderboard(_id=ObjectId(), user=users[2], score=80),
-        ]
-        Leaderboard.objects.bulk_create(leaderboard_entries)
-
-        # Create workouts
-        workouts = [
-            Workout(_id=ObjectId(), name='Morning Run', description='A 5km run to start the day'),
-            Workout(_id=ObjectId(), name='Cycling Session', description='A 20km cycling session'),
-            Workout(_id=ObjectId(), name='Swimming Laps', description='30 minutes of swimming laps'),
-        ]
-        Workout.objects.bulk_create(workouts)
+        # Insert test data
+        db.users.insert_many(test_data['users'])
+        db.teams.insert_many(test_data['teams'])
+        db.activity.insert_many(test_data['activities'])
+        db.leaderboard.insert_many(test_data['leaderboard'])
+        db.workouts.insert_many(test_data['workouts'])
 
         self.stdout.write(self.style.SUCCESS('Successfully populated the database with test data.'))
